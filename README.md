@@ -23,12 +23,9 @@ choix du PIN, connexion à ton compte Claude, service de démarrage automatique,
   curl -fsSL https://raw.githubusercontent.com/Joboko98/claude-relay/main/scripts/install.sh | bash
   ```
 
-Ces adresses fonctionnent telles quelles si le dépôt est public. S'il est privé, l'adresse « raw »
-exige d'être connecté : héberge alors les deux scripts dans un gist public (depuis le Mac :
-`gh gist create --public scripts/install.ps1` et `gh gist create --public scripts/install.sh`,
-puis utilise l'adresse « Raw » du gist), et la commande te demandera un jeton GitHub de lecture.
-Relancer la même commande plus tard répare ou met à jour l'installation sans toucher au PIN,
-à la configuration ni aux conversations.
+Le dépôt est public : aucun jeton n'est nécessaire, ni à l'installation ni pour les mises à jour
+(à la question « Jeton GitHub », appuie simplement sur Entrée). Relancer la même commande plus tard
+répare ou réinstalle sans toucher au PIN, à la configuration ni aux conversations.
 
 ## Installation manuelle
 
@@ -122,8 +119,8 @@ disponible » en bas à gauche.
 
 Configuration, une seule fois par poste, dans ⚙ → « Source des mises à jour » :
 - **Dépôt** : `propriétaire/nom` (ex. `yossef/claude-relay`).
-- **Jeton GitHub** si le dépôt est privé : sur github.com → Settings → Developer settings →
-  Fine-grained tokens → nouveau jeton limité à ce dépôt, permission *Contents : Read-only*.
+- **Jeton GitHub** : inutile tant que le dépôt est public ; à renseigner seulement s'il redevient privé
+  (jeton à grain fin limité à ce dépôt, permission *Contents : Read-only*).
 
 Publier une nouvelle version depuis le poste de développement (le Mac) :
 ```bash
