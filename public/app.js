@@ -946,12 +946,34 @@ $('#pickForm').addEventListener('submit', (e) => {
 });
 
 // ---------- Signalement de bug ----------
-const bug = { zone: null, drag: null };
+const bug = { zone: null, drag: null, pasted: null };
+
+function bugSetPasted(file) {
+  if (!file || !/^image\//.test(file.type)) return;
+  const r = new FileReader();
+  r.onload = () => {
+    bug.pasted = { b64: String(r.result).split(',')[1], mime: file.type };
+    $('#bugPastedImg').src = String(r.result);
+    $('#bugPasted').hidden = false;
+    $('#bugPasteHint').hidden = true;
+  };
+  r.readAsDataURL(file);
+}
+function bugClearPasted() { bug.pasted = null; $('#bugPasted').hidden = true; $('#bugPasteHint').hidden = false; $('#bugPastedImg').src = ''; }
+$('#bugPastedRemove').addEventListener('click', bugClearPasted);
+$('#bugForm').addEventListener('paste', (e) => {
+  const f = [...(e.clipboardData?.files || [])].find((x) => /^image\//.test(x.type));
+  if (f) { e.preventDefault(); bugSetPasted(f); }
+});
+for (const ev of ['dragenter', 'dragover']) $('#bugPasteZone').addEventListener(ev, (e) => { e.preventDefault(); $('#bugPasteZone').classList.add('dragover'); });
+for (const ev of ['dragleave', 'drop']) $('#bugPasteZone').addEventListener(ev, (e) => { e.preventDefault(); $('#bugPasteZone').classList.remove('dragover'); });
+$('#bugPasteZone').addEventListener('drop', (e) => bugSetPasted(e.dataTransfer?.files?.[0]));
 
 function bugOpen() {
   if (state.locked) return;
   for (const d of document.querySelectorAll('dialog[open]')) if (d.id !== 'bugDialog') d.close();
   bug.zone = null;
+  bugClearPasted();
   $('#bugCadre').hidden = true;
   $('#bugForm').hidden = true;
   $('#bugZone').hidden = false;
@@ -1046,7 +1068,7 @@ $('#bugForm').addEventListener('submit', async (e) => {
   $('#bugForm').hidden = false;
   try {
     const r = await api('POST', '/api/bugs', {
-      texte, zone, image, html: bugHtml(zone),
+      texte, zone, image, collee: bug.pasted, html: bugHtml(zone),
       contexte: {
         url: location.href, conversation: state.current ? { id: state.current.id, titre: state.current.title, statut: state.current.status } : null,
         viewport: `${window.innerWidth}×${window.innerHeight}`, userAgent: navigator.userAgent,

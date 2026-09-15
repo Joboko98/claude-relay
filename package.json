@@ -1,6 +1,6 @@
 {
   "name": "claude-relay",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Interface web privée (PIN) par-dessus Claude Code, pour rester connecté sur un poste partagé.",

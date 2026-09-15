@@ -191,7 +191,11 @@
   <form id="bugForm" class="bug-form" hidden>
     <h2>Signaler un bug</h2>
     <label>Qu'est-ce qui ne va pas ? <textarea id="bugText" rows="4" placeholder="Ce que tu as fait, ce que tu attendais, ce qui s'est passé."></textarea></label>
-    <label class="check"><input id="bugShot" type="checkbox" checked> Joindre une capture de la zone (le navigateur demandera l'autorisation de capturer cet onglet)</label>
+    <label class="check"><input id="bugShot" type="checkbox" checked> Joindre une capture de la zone (le navigateur demandera l'autorisation de capturer cet onglet ; choisis « Écran entier » pour inclure une fenêtre extérieure)</label>
+    <div class="bug-colle" id="bugPasteZone">
+      <span id="bugPasteHint">Une fenêtre en dehors de l'app ? Fais une capture Windows (Win+Maj+S) ou Mac (Cmd+Ctrl+Maj+4), puis colle-la ici avec Ctrl+V, ou dépose une image.</span>
+      <span id="bugPasted" hidden><img id="bugPastedImg" alt="Image collée"> <button type="button" id="bugPastedRemove" title="Retirer">×</button></span>
+    </div>
     <p class="hint">Le rapport contient aussi : la version de l'app, la conversation ouverte, les dernières erreurs du navigateur et du serveur, et le morceau de page sous la zone. Aucun texte de tes conversations n'est copié en dehors de ce poste : le rapport est déposé dans une conversation « 🐞 Bugs de l'app » ici même, où Claude pose un diagnostic que tu peux me transmettre.</p>
     <p class="hint bad" id="bugMsg"></p>
     <div class="dialog-actions">

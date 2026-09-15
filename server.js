@@ -177,6 +177,13 @@ async function api(req, res, url) {
       fs.writeFileSync(img, Buffer.from(body.image, 'base64'));
       attachments.push({ path: img, rel: 'capture.png', name: 'capture.png', kind: 'image', mime: 'image/png', size: fs.statSync(img).size });
     }
+    if (body.collee && typeof body.collee.b64 === 'string' && body.collee.b64.length < 8_000_000) {
+      const ext = /jpeg/.test(body.collee.mime) ? 'jpg' : /webp/.test(body.collee.mime) ? 'webp' : /gif/.test(body.collee.mime) ? 'gif' : 'png';
+      const mime = { jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', png: 'image/png' }[ext];
+      const img = path.join(dir, `collee.${ext}`);
+      fs.writeFileSync(img, Buffer.from(body.collee.b64, 'base64'));
+      attachments.push({ path: img, rel: `collee.${ext}`, name: `collee.${ext}`, kind: 'image', mime, size: fs.statSync(img).size });
+    }
     const ctx = body.contexte || {};
     const st = updater.status();
     const pol = effectivePolicy(config);
@@ -232,7 +239,7 @@ async function api(req, res, url) {
     }
     const consigne = [
       `Rapport de bug sur l'application claude-relay (l'interface que tu es en train de servir). Le dossier de travail est celui de l'application : lis le code concerné (public/app.js, public/index.html, public/style.css, server.js, lib/) pour trouver la cause.`,
-      `Consigne : ne modifie AUCUN fichier de ce poste. Rédige un diagnostic clair (cause probable, fichier et lignes concernés) puis un correctif proposé sous forme de diff, que je transmettrai au poste de développement. Le rapport complet est dans le fichier joint rapport.md ; une capture est jointe si disponible.`,
+      `Consigne : ne modifie AUCUN fichier de ce poste. Rédige un diagnostic clair (cause probable, fichier et lignes concernés) puis un correctif proposé sous forme de diff, que je transmettrai au poste de développement. Le rapport complet est dans le fichier joint rapport.md ; capture.png est une capture de l'onglet si disponible, collee.* une image fournie par l'utilisateur (par exemple une fenêtre système en dehors de l'app).`,
       '',
       `Description donnée par l'utilisateur : ${texte}`,
     ].join('\n');

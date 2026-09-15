@@ -210,3 +210,7 @@ dialog.bug.phase-form::backdrop { background: rgba(0,0,0,0.4); }
 .bug-form textarea { font-family: inherit; font-size: 14px; }
 .hint.bad { color: var(--danger); }
 h2 .bug-in-dialog { font-size: 14px; vertical-align: middle; margin-left: 6px; }
+.bug-colle { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bug-colle.dragover { border-color: var(--accent); }
+.bug-colle img { max-height: 90px; max-width: 220px; border-radius: 6px; border: 1px solid var(--line); vertical-align: middle; }
+.bug-colle button { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
