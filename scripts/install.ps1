@@ -94,8 +94,8 @@ fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
 $env:RELAY_TOKEN = $token
 $env:RELAY_CLAUDE = if ($claudeExe) { $claudeExe } else { '' }
 node -e $cfgScript
-Remove-Item Env:RELAY_TOKEN
-Remove-Item Env:RELAY_CLAUDE
+Remove-Item Env:RELAY_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:RELAY_CLAUDE -ErrorAction SilentlyContinue
 
 # 5. Connexion Claude (une seule fois)
 if ($claudeExe) {
@@ -117,3 +117,4 @@ Start-Process 'http://127.0.0.1:7777'
 Write-Host ''
 Write-Host 'Terminé. La page http://127.0.0.1:7777 est ouverte : tape ton PIN.' -ForegroundColor Green
 Write-Host 'Mises à jour : dans l''app, Réglages → Mise à jour → Vérifier / Mettre à jour maintenant.'
+if ($claudeExe) { Write-Host "Dans cette fenêtre, la commande claude s'appelle :  & `"$claudeExe`"   (ou simplement claude après avoir rouvert PowerShell)." }
