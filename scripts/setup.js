@@ -52,8 +52,8 @@ if (bin) {
 }
 console.log(`
 Étapes suivantes :
-  1. Connecte Claude Code une seule fois sur ce poste :  claude   →  /login  (compte Google)
-  2. Démarre :  npm start   (ou installe le service :  npm run service install)
+  1. Connecte Claude Code une seule fois sur ce poste :  claude auth login  (compte Google)
+  2. Démarre :  npm start   (ou installe le service :  npm run service -- install)
   3. Ouvre     :  http://${cfg.host}:${cfg.port}
-Réglages (config.json) : permissionMode, model, effort, lockOnHide, lockAfterMinutes, host/port.
+Tout le reste se règle dans l'interface (⚙ Réglages).
 `);

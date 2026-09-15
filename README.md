@@ -9,7 +9,28 @@ conversations.
 
 Fonctionne sur **macOS, Windows et Linux**. Aucune dépendance npm : Node ≥ 20 suffit.
 
-## Installation sur l'ordi du bureau
+## Installation en une ligne
+
+Une seule commande fait tout : Node et Claude Code s'ils manquent, téléchargement de l'app,
+choix du PIN, connexion à ton compte Claude, service de démarrage automatique, ouverture de la page.
+
+- **Windows** (PowerShell) :
+  ```powershell
+  irm https://raw.githubusercontent.com/Joboko98/claude-relay/main/scripts/install.ps1 | iex
+  ```
+- **macOS / Linux** (Terminal) :
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/Joboko98/claude-relay/main/scripts/install.sh | bash
+  ```
+
+Ces adresses fonctionnent telles quelles si le dépôt est public. S'il est privé, l'adresse « raw »
+exige d'être connecté : héberge alors les deux scripts dans un gist public (depuis le Mac :
+`gh gist create --public scripts/install.ps1` et `gh gist create --public scripts/install.sh`,
+puis utilise l'adresse « Raw » du gist), et la commande te demandera un jeton GitHub de lecture.
+Relancer la même commande plus tard répare ou met à jour l'installation sans toucher au PIN,
+à la configuration ni aux conversations.
+
+## Installation manuelle
 
 1. Installer Node (https://nodejs.org, version LTS) puis Claude Code :
    - macOS / Linux : `curl -fsSL https://claude.ai/install.sh | bash`
