@@ -38,7 +38,7 @@ TMP="$(mktemp -d)"
 AUTH=()
 [ -n "$TOKEN" ] && AUTH=(-H "Authorization: Bearer $TOKEN")
 echo "- Téléchargement de $REPO ($BRANCH)…"
-if ! curl -fsSL "${AUTH[@]}" -H "Accept: application/vnd.github+json" -H "User-Agent: claude-relay-installer" "https://api.github.com/repos/$REPO/tarball/$BRANCH" -o "$TMP/app.tgz"; then
+if ! curl -fsSL ${AUTH[@]+"${AUTH[@]}"} -H "Accept: application/vnd.github+json" -H "User-Agent: claude-relay-installer" "https://api.github.com/repos/$REPO/tarball/$BRANCH" -o "$TMP/app.tgz"; then
   echo "Téléchargement impossible : dépôt privé sans jeton valide ?"; exit 1
 fi
 tar -xzf "$TMP/app.tgz" -C "$TMP"
