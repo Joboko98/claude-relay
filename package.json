@@ -1,0 +1,16 @@
+{
+  "name": "claude-relay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Interface web privée (PIN) par-dessus Claude Code, pour rester connecté sur un poste partagé.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.js",
+    "start": "node server.js",
+    "service": "node scripts/service.js",
+    "test": "node --test"
+  }
+}

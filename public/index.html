@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>Relay</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<section id="lock" class="screen">
+  <form id="lockForm" autocomplete="off">
+    <div class="lock-icon" aria-hidden="true">●</div>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Code" aria-label="Code PIN" autofocus>
+    <button type="submit">Ouvrir</button>
+    <p id="lockMsg" class="lock-msg"></p>
+  </form>
+</section>
+
+<section id="app" class="screen" hidden>
+  <aside id="sidebar">
+    <div class="side-head">
+      <button id="newConv" class="primary">+ Nouvelle</button>
+      <button id="settingsBtn" class="icon" title="Réglages">⚙</button>
+      <button id="lockBtn" class="icon" title="Verrouiller (Échap)">🔒</button>
+    </div>
+    <ul id="convList"></ul>
+    <div class="side-foot">
+      <div id="moment" class="moment"></div>
+      <div id="usage" class="usage"></div>
+      <div id="claudeStatus"></div>
+      <div id="versionLine" class="when"></div>
+    </div>
+  </aside>
+
+  <main>
+    <header id="convHead">
+      <button id="menuBtn" class="icon" title="Conversations">☰</button>
+      <span id="convTitle" class="title">—</span>
+      <span id="convStatus" class="status"></span>
+      <select id="modelSel" class="mini" title="Modèle de cette conversation"></select>
+      <select id="effortSel" class="mini" title="Effort de cette conversation"></select>
+      <select id="confSel" class="mini" title="Confinement de cette conversation"></select>
+      <button id="renameBtn" class="icon" title="Renommer">✎</button>
+      <button id="deleteBtn" class="icon" title="Supprimer">🗑</button>
+    </header>
+
+    <div id="messages"></div>
+
+    <form id="composer">
+      <textarea id="input" rows="2" placeholder="Message… (Entrée : envoyer · Maj+Entrée : retour à la ligne)"></textarea>
+      <div class="composer-actions">
+        <button id="stopBtn" type="button" class="danger" hidden>■ Stop</button>
+        <button id="sendBtn" type="submit" class="primary">Envoyer</button>
+      </div>
+    </form>
+  </main>
+</section>
+
+<dialog id="newDialog">
+  <form method="dialog" id="newForm">
+    <h2>Nouvelle conversation</h2>
+    <label>Titre <input id="newTitle" placeholder="(auto : premier message)"></label>
+    <label>Dossier de travail
+      <span class="with-btn"><input id="newCwd" placeholder="/Users/…"><button type="button" class="pick" data-target="newCwd" title="Parcourir">📁</button></span>
+    </label>
+    <div class="row">
+      <label>Modèle <select id="newModel"></select></label>
+      <label>Effort <select id="newEffort"></select></label>
+    </div>
+    <label>Confinement <select id="newConf"></select></label>
+    <div class="dialog-actions">
+      <button type="button" id="newCancel">Annuler</button>
+      <button type="submit" class="primary">Créer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="settingsDialog">
+  <form method="dialog" id="settingsForm">
+    <h2>Réglages</h2>
+    <div class="row">
+      <label>Modèle par défaut <select id="setModel"></select></label>
+      <label>Effort par défaut <select id="setEffort"></select></label>
+    </div>
+    <label>Permissions des outils
+      <select id="setPermission">
+        <option value="acceptEdits">acceptEdits — édite les fichiers seul, refuse le reste</option>
+        <option value="bypassPermissions">bypassPermissions — tout est autorisé (tâches longues sans surveillance)</option>
+        <option value="plan">plan — lecture seule, propose un plan</option>
+        <option value="default">default — refuse tout ce qui demanderait une confirmation</option>
+      </select>
+    </label>
+    <label>Confinement par défaut <select id="setConf"></select></label>
+    <p class="hint" id="confHint"></p>
+    <label>Dossier de travail par défaut
+      <span class="with-btn"><input id="setCwd"><button type="button" class="pick" data-target="setCwd" title="Parcourir">📁</button></span>
+    </label>
+    <h3>Barrières de consommation <span id="lockBadge" class="badge" hidden>🔒 verrouillées par l'administrateur</span></h3>
+    <p class="hint" id="policyInfo"></p>
+    <fieldset id="barrierFields" class="barriers">
+      <div class="row">
+        <label>1. Part de ce poste, fenêtre 5 h (%) <input id="setSessionLocal" type="number" min="0" max="100" step="1"></label>
+        <label>2. Part de ce poste, semaine (%) <input id="setWeeklyLocal" type="number" min="0" max="100" step="1"></label>
+      </div>
+      <div class="row">
+        <label>3. Réserve maison, fenêtre 5 h (%) <input id="setSessionReserve" type="number" min="0" max="100" step="1"></label>
+        <label>4. Réserve maison, semaine (%) <input id="setWeeklyReserve" type="number" min="0" max="100" step="1"></label>
+      </div>
+      <div class="row">
+        <label>Pleine réserve 5 h tant qu'il reste plus de (h) <input id="setSessionRelease" type="number" min="0" max="5" step="0.5"></label>
+        <label>Pleine réserve semaine tant qu'il reste plus de (jours) <input id="setWeeklyRelease" type="number" min="0" max="7" step="0.5"></label>
+      </div>
+    </fieldset>
+    <p class="hint">0 = barrière désactivée. 1 et 2 : consommation propre de ce poste (estimée d'après le coût des tâches, calibrage automatique). 3 et 4 : ce poste s'arrête quand il reste moins que la réserve sur le compte entier ; la réserve exigée diminue proportionnellement au temps restant en fin de fenêtre. <button type="button" id="resetLocalBtn" class="link">Remettre le compteur de ce poste à zéro</button></p>
+    <h3>Mise à jour</h3>
+    <p class="hint" id="updateInfo"></p>
+    <div class="dialog-actions update-actions">
+      <button type="button" id="updateCheck">Vérifier</button>
+      <button type="button" id="updateApply" class="primary" hidden>Mettre à jour maintenant</button>
+    </div>
+    <details id="updateSection">
+      <summary>Source des mises à jour (GitHub)</summary>
+      <label>Dépôt (propriétaire/nom) <input id="setUpdateRepo" placeholder="ex. yossef/claude-relay"></label>
+      <div class="row">
+        <label>Branche <input id="setUpdateBranch" placeholder="main"></label>
+        <label>Jeton GitHub (dépôt privé) <input id="setUpdateToken" type="password" autocomplete="off" placeholder="github_pat_…"></label>
+      </div>
+      <p class="hint">Le jeton n'a besoin que du droit de lecture du contenu du dépôt. Il reste dans le fichier de configuration de ce poste.</p>
+    </details>
+    <details id="lockSection">
+      <summary>Verrouillage par un poste administrateur</summary>
+      <label>Clé publique de l'administrateur <input id="setAdminKey" placeholder="Collée une seule fois depuis le poste maison"></label>
+      <label>Nouvelle politique signée <textarea id="policyPaste" rows="3" placeholder="Colle ici la politique générée sur le poste administrateur"></textarea></label>
+      <div class="dialog-actions"><button type="button" id="policyApply">Appliquer la politique</button></div>
+    </details>
+    <details id="adminSection">
+      <summary>Administrer un autre poste (depuis ce poste)</summary>
+      <p class="hint">Ce poste devient administrateur : sa clé privée ne le quitte jamais. Copie la clé publique dans les réglages du poste à administrer, puis génère des politiques signées ici à chaque changement de barrières.</p>
+      <div class="dialog-actions"><button type="button" id="adminCreateKey">Créer / afficher la clé</button></div>
+      <label>Clé publique à copier sur le poste administré <textarea id="adminPubKey" rows="2" readonly></textarea></label>
+      <label>Note (facultatif) <input id="adminNote" placeholder="ex. semaine du 15 septembre"></label>
+      <div class="dialog-actions"><button type="button" id="adminSign">Générer la politique signée avec les valeurs ci-dessus</button></div>
+      <label>Politique signée à coller sur le poste administré <textarea id="adminSigned" rows="4" readonly></textarea></label>
+    </details>
+    <div class="row">
+      <label>Verrouiller après (min) <input id="setLockAfter" type="number" min="0" max="1440" step="1"></label>
+      <label class="check"><input id="setLockOnHide" type="checkbox"> Verrouiller si l'onglet est masqué</label>
+    </div>
+    <div class="dialog-actions">
+      <button type="button" id="settingsCancel">Annuler</button>
+      <button type="submit" class="primary">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="pickDialog">
+  <form method="dialog" id="pickForm">
+    <h2>Choisir un dossier</h2>
+    <div class="pick-path" id="pickPath"></div>
+    <ul class="pick-list" id="pickList"></ul>
+    <div class="pick-new">
+      <input id="pickNewName" placeholder="Nom du nouveau dossier">
+      <button type="button" id="pickNewBtn">Créer ici</button>
+    </div>
+    <p class="hint" id="pickMsg"></p>
+    <div class="dialog-actions">
+      <button type="button" id="pickCancel">Annuler</button>
+      <button type="submit" class="primary" id="pickChoose">Choisir ce dossier</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>
