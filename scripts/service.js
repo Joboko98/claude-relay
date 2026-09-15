@@ -146,7 +146,7 @@ sh.Run "cmd /c """"${process.execPath}"" ""${SERVER}"" >> ""${LOG}"" 2>&1""", 0,
       if (!listening()) {
         run('wscript.exe', [VBS]);
         const t0 = Date.now();
-        while (!listening() && Date.now() - t0 < 8000) { execFileSync('cmd.exe', ['/c', 'timeout /t 1 /nobreak >nul'], { stdio: 'ignore' }); }
+        while (!listening() && Date.now() - t0 < 8000) { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000); }
       }
       if (listening()) console.log(`Serveur lancé et inscrit au démarrage de la session : ${LINK}`);
       else console.log(`Inscrit au démarrage (${LINK}) mais le serveur ne répond pas encore : regarde ${LOG}, ou lance  npm start`);
