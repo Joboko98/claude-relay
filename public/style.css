@@ -177,3 +177,19 @@ dialog textarea { width: 100%; font-family: ui-monospace, Menlo, monospace; font
 .update-actions { justify-content: flex-start; margin-bottom: 6px; }
 #versionLine { margin-top: 4px; }
 #versionLine .avail { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
+/* Pièces jointes */
+.composer-actions .spacer { flex: 1; }
+.upload-status { font-size: 12px; color: var(--muted); align-self: center; }
+.pending { display: flex; flex-wrap: wrap; gap: 6px; }
+.pending .chip, .attachments .chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--tool); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 10px; font-size: 12px; max-width: 260px;
+}
+.pending .chip span, .attachments .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pending .chip button { border: none; background: none; padding: 0 2px; cursor: pointer; color: var(--muted); font-size: 14px; }
+.pending .chip img { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; }
+.attachments { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; justify-content: flex-end; }
+.attachments a.thumb img { max-width: 220px; max-height: 180px; border-radius: 8px; border: 1px solid var(--line); display: block; }
+.attachments a { color: inherit; text-decoration: none; }
+#composer.dragover { outline: 2px dashed var(--accent); outline-offset: -4px; }

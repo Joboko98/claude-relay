@@ -322,7 +322,7 @@ async function api(req, res, url) {
     return json(res, 201, conv);
   }
 
-  const m = p.match(/^\/api\/conversations\/([0-9a-f-]{36})(?:\/(send|stop))?$/);
+  const m = p.match(/^\/api\/conversations\/([0-9a-f-]{36})(?:\/(send|stop|files|file))?$/);
   if (m) {
     const conv = store.get(m[1]);
     if (!conv) return json(res, 404, { error: 'Conversation introuvable' });
@@ -352,10 +352,54 @@ async function api(req, res, url) {
       hub.broadcast({ type: 'conv', action: 'deleted', id: conv.id });
       return json(res, 200, { ok: true });
     }
+    // Dépôt d'une pièce jointe (corps brut) : <cwd>/_envois/<lot>/<chemin relatif>
+    if (action === 'files' && method === 'PUT') {
+      const batch = String(url.searchParams.get('batch') || '');
+      const rel = String(url.searchParams.get('path') || '').replace(/\\/g, '/').replace(/^\/+/, '');
+      if (!/^\d{8}-\d{6}$/.test(batch)) return json(res, 400, { error: 'Lot invalide' });
+      if (!rel || rel.split('/').some((seg) => !seg || seg === '.' || seg === '..')) return json(res, 400, { error: 'Chemin de fichier invalide' });
+      const baseDir = path.join(conv.cwd, '_envois', batch);
+      const target = path.resolve(baseDir, ...rel.split('/'));
+      if (!target.startsWith(path.resolve(baseDir) + path.sep)) return json(res, 400, { error: 'Chemin de fichier invalide' });
+      const chunks = [];
+      let size = 0;
+      await new Promise((resolve, reject) => {
+        req.on('data', (c) => { size += c.length; if (size > 50 * 1024 * 1024) { reject(new Error('Fichier trop volumineux (50 Mo max)')); req.destroy(); } else chunks.push(c); });
+        req.on('end', resolve);
+        req.on('error', reject);
+      }).catch((err) => { json(res, 413, { error: err.message }); return null; });
+      if (res.headersSent) return undefined;
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, Buffer.concat(chunks));
+      const mime = String(req.headers['content-type'] || 'application/octet-stream').split(';')[0];
+      const kind = /^image\/(png|jpeg|gif|webp)$/.test(mime) ? 'image' : 'file';
+      return json(res, 201, { path: target, rel, name: path.basename(rel), kind, mime, size });
+    }
+
+    // Lecture d'une pièce jointe (aperçus dans la conversation), limitée au dossier _envois de la conversation
+    if (action === 'file' && method === 'GET') {
+      const target = path.resolve(String(url.searchParams.get('path') || ''));
+      const envois = path.resolve(conv.cwd, '_envois');
+      if (!target.startsWith(envois + path.sep) || !fs.existsSync(target) || !fs.statSync(target).isFile()) {
+        res.writeHead(404); return res.end();
+      }
+      const ext = path.extname(target).toLowerCase();
+      const type = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8' }[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'" });
+      return fs.createReadStream(target).pipe(res);
+    }
+
     if (action === 'send' && method === 'POST') {
       const body = await readBody(req);
       const text = String(body.text || '').trim();
-      if (!text) return json(res, 400, { error: 'Message vide' });
+      const envois = path.resolve(conv.cwd, '_envois');
+      const attachments = [];
+      for (const a of Array.isArray(body.attachments) ? body.attachments.slice(0, 200) : []) {
+        const ap = path.resolve(String(a.path || ''));
+        if (!ap.startsWith(envois + path.sep) || !fs.existsSync(ap)) continue;
+        attachments.push({ path: ap, rel: String(a.rel || path.basename(ap)), name: path.basename(ap), kind: a.kind === 'image' ? 'image' : 'file', mime: String(a.mime || ''), size: Number(a.size) || fs.statSync(ap).size });
+      }
+      if (!text && !attachments.length) return json(res, 400, { error: 'Message vide' });
       const pol = effectivePolicy(config);
       if (pol.sessionLocalLimitPercent > 0 || pol.weeklyLocalLimitPercent > 0 || pol.sessionReservePercent > 0 || pol.weeklyReservePercent > 0) {
         await usage.refresh();
@@ -363,11 +407,11 @@ async function api(req, res, url) {
         if (why) return json(res, 429, { error: why });
       }
       if (conv.title === 'Nouvelle conversation') {
-        const title = text.split('\n')[0].slice(0, 60);
+        const title = (text || attachments[0]?.name || 'Pièces jointes').split('\n')[0].slice(0, 60);
         store.update(conv.id, { title });
         hub.broadcast({ type: 'conv', action: 'updated', conv: store.get(conv.id) });
       }
-      const msg = runner.send(store.get(conv.id), text);
+      const msg = runner.send(store.get(conv.id), text || (attachments.length ? 'Voici des pièces jointes.' : ''), attachments);
       return json(res, 200, { ok: true, message: msg, queued: runner.queueSize(conv.id) });
     }
     if (action === 'stop' && method === 'POST') {

@@ -90,6 +90,12 @@ répare ou réinstalle sans toucher au PIN, à la configuration ni aux conversat
   `adminPublicKey` : c'est volontairement un geste à froid, pas un bouton.
 - **Compteur « ce poste »** : sous la barre correspondante, avec un bouton de remise à zéro dans les
   réglages (désactivé si le poste est verrouillé). Il repart de zéro à chaque nouvelle fenêtre.
+- **Pièces jointes** : bouton 📎 (fichiers, images), bouton 📁 (un dossier entier, arborescence
+  comprise), collage d'une capture d'écran avec Ctrl+V / Cmd+V dans la zone de message, ou
+  glisser-déposer. Tout est copié dans `_envois/<date-heure>/` à l'intérieur du dossier de travail de
+  la conversation. Les images (PNG, JPEG, GIF, WebP) sont montrées directement à Claude, réduites à
+  1600 px si besoin ; les autres fichiers lui sont signalés par leur chemin et il les lit avec ses
+  outils. Limite : 50 Mo par fichier. Les aperçus apparaissent dans la conversation.
 - **Dossier de travail** : bouton 📁 à côté du champ (nouvelle conversation ou ⚙ Réglages) pour
   parcourir les dossiers et en créer. L'explorateur reste sous `browseRoot` (ton dossier
   personnel par défaut).

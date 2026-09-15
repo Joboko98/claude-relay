@@ -461,6 +461,20 @@ function renderMessage(m) {
       node = el('div', 'msg user');
       const d = el('div');
       d.textContent = m.text;
+      if (m.attachments?.length) {
+        const wrap = el('div', 'attachments');
+        for (const a of m.attachments) {
+          const href = `/api/conversations/${state.current?.id}/file?path=${encodeURIComponent(a.path)}`;
+          if (a.kind === 'image') {
+            const link = el('a', 'thumb'); link.href = href; link.target = '_blank'; link.rel = 'noopener';
+            const img = el('img'); img.src = href; img.alt = a.name; img.loading = 'lazy';
+            link.appendChild(img); wrap.appendChild(link);
+          } else {
+            const chip = el('span', 'chip', '📄 '); const nm = el('span'); nm.textContent = a.rel || a.name; chip.appendChild(nm); chip.title = a.path; wrap.appendChild(chip);
+          }
+        }
+        d.appendChild(wrap);
+      }
       node.appendChild(d);
       break;
     }
@@ -544,14 +558,103 @@ function localError(text) {
   scrollBottom(true);
 }
 
+// ---------- Pièces jointes ----------
+const pending = []; // { file, rel, kind, preview }
+const IMAGE_RE = /^image\/(png|jpeg|gif|webp)$/;
+
+function renderPending() {
+  const box = $('#pending');
+  box.innerHTML = '';
+  box.hidden = pending.length === 0;
+  pending.forEach((p, i) => {
+    const chip = el('span', 'chip');
+    if (p.preview) { const img = el('img'); img.src = p.preview; chip.appendChild(img); }
+    else chip.appendChild(document.createTextNode(p.kind === 'image' ? '🖼 ' : '📄 '));
+    const nm = el('span'); nm.textContent = p.rel; chip.appendChild(nm);
+    const x = el('button', '', '×'); x.type = 'button'; x.title = 'Retirer';
+    x.addEventListener('click', () => { pending.splice(i, 1); renderPending(); });
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+
+function addFiles(fileList, { relative = false } = {}) {
+  for (const file of fileList) {
+    if (!file || file.size === 0 && !file.type) continue;
+    const rel = (relative && file.webkitRelativePath) ? file.webkitRelativePath : (file.name || `image-${Date.now()}.png`);
+    if (rel.split('/').some((seg) => seg === 'node_modules' || seg === '.git' || seg.startsWith('.DS_'))) continue;
+    const kind = IMAGE_RE.test(file.type) ? 'image' : 'file';
+    const p = { file, rel, kind, preview: null };
+    if (kind === 'image') { p.preview = URL.createObjectURL(file); }
+    pending.push(p);
+  }
+  renderPending();
+}
+
+/** Réduit une image trop grande (côté ≤ 1600 px) pour rester légère à transmettre. */
+async function shrinkImage(file) {
+  if (!IMAGE_RE.test(file.type) || file.type === 'image/gif') return file;
+  const bmp = await createImageBitmap(file).catch(() => null);
+  if (!bmp) return file;
+  const max = 1600;
+  if (bmp.width <= max && bmp.height <= max && file.size < 3 * 1024 * 1024) { bmp.close(); return file; }
+  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.85));
+  return blob ? new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }) : file;
+}
+
+async function uploadPending(convId) {
+  const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14).replace(/(\d{8})(\d{6})/, '$1-$2');
+  const done = [];
+  for (let i = 0; i < pending.length; i++) {
+    const p = pending[i];
+    $('#uploadStatus').textContent = `Envoi ${i + 1}/${pending.length} : ${p.rel}`;
+    const file = p.kind === 'image' ? await shrinkImage(p.file) : p.file;
+    const rel = p.kind === 'image' && file !== p.file ? p.rel.replace(/\.[^.]+$/, '') + '.jpg' : p.rel;
+    const r = await fetch(`/api/conversations/${convId}/files?batch=${stamp}&path=${encodeURIComponent(rel)}`, {
+      method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Requested-With': 'fetch' }, body: file,
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`${p.rel} : ${data.error || r.statusText}`);
+    done.push(data);
+  }
+  $('#uploadStatus').textContent = '';
+  return done;
+}
+
+$('#attachBtn').addEventListener('click', () => $('#fileInput').click());
+$('#attachDirBtn').addEventListener('click', () => $('#dirInput').click());
+$('#fileInput').addEventListener('change', (e) => { addFiles(e.target.files); e.target.value = ''; });
+$('#dirInput').addEventListener('change', (e) => { addFiles(e.target.files, { relative: true }); e.target.value = ''; });
+$('#input').addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); addFiles(files); }
+});
+for (const ev of ['dragenter', 'dragover']) $('#composer').addEventListener(ev, (e) => { e.preventDefault(); $('#composer').classList.add('dragover'); });
+for (const ev of ['dragleave', 'drop']) $('#composer').addEventListener(ev, (e) => { e.preventDefault(); $('#composer').classList.remove('dragover'); });
+$('#composer').addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
+
 // ---------- Composer ----------
 async function sendCurrent() {
   const ta = $('#input');
   const text = ta.value.trim();
-  if (!text || !state.current) return;
+  if ((!text && !pending.length) || !state.current) return;
   ta.value = '';
+  const kept = pending.splice(0, pending.length);
+  renderPending();
   try {
-    const r = await api('POST', `/api/conversations/${state.current.id}/send`, { text });
+    let attachments = [];
+    if (kept.length) {
+      pending.push(...kept); renderPending();
+      attachments = await uploadPending(state.current.id);
+      for (const p of kept) if (p.preview) URL.revokeObjectURL(p.preview);
+      pending.splice(0, pending.length); renderPending();
+    }
+    const r = await api('POST', `/api/conversations/${state.current.id}/send`, { text, attachments });
     if (!document.getElementById('m-' + r.message.id)) {
       removeLive();
       $('#messages').appendChild(renderMessage(r.message));
@@ -560,6 +663,8 @@ async function sendCurrent() {
     scrollBottom(true);
   } catch (err) {
     ta.value = text;
+    if (!pending.length) { pending.push(...kept); renderPending(); }
+    $('#uploadStatus').textContent = '';
     if (err.status === 429) { localError(err.message); refreshUsage(); } else alert(err.message);
   }
 }

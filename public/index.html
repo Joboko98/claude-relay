@@ -49,11 +49,18 @@
     <div id="messages"></div>
 
     <form id="composer">
-      <textarea id="input" rows="2" placeholder="Message… (Entrée : envoyer · Maj+Entrée : retour à la ligne)"></textarea>
+      <div id="pending" class="pending" hidden></div>
+      <textarea id="input" rows="2" placeholder="Message… (Entrée : envoyer · Maj+Entrée : retour à la ligne · colle ou dépose des images et fichiers)"></textarea>
       <div class="composer-actions">
+        <button id="attachBtn" type="button" class="icon" title="Joindre des fichiers ou images">📎</button>
+        <button id="attachDirBtn" type="button" class="icon" title="Joindre un dossier entier">📁</button>
+        <span id="uploadStatus" class="upload-status"></span>
+        <span class="spacer"></span>
         <button id="stopBtn" type="button" class="danger" hidden>■ Stop</button>
         <button id="sendBtn" type="submit" class="primary">Envoyer</button>
       </div>
+      <input id="fileInput" type="file" multiple hidden>
+      <input id="dirInput" type="file" webkitdirectory multiple hidden>
     </form>
   </main>
 </section>
