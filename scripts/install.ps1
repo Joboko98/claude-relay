@@ -22,13 +22,34 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 }
 Write-Host "- Node.js : $(node --version)"
 
-# 2. Claude Code
-if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-  Write-Host '- Claude Code absent : installation…'
-  Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression
-  Refresh-Path
+# 2. Claude Code : on ne dépend pas du PATH, on cherche le programme à ses emplacements connus.
+function Find-Claude {
+  $cmd = Get-Command claude -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  foreach ($c in @("$env:USERPROFILE\.local\bin\claude.exe", "$env:LOCALAPPDATA\Programs\claude\claude.exe", "$env:APPDATA\npm\claude.cmd")) {
+    if (Test-Path $c) { return $c }
+  }
+  return $null
 }
-if (Get-Command claude -ErrorAction SilentlyContinue) { Write-Host "- Claude Code : $(claude --version)" } else { Write-Warning 'Claude Code non détecté : ferme et rouvre PowerShell après l''installation, puis relance ce script.' }
+$claudeExe = Find-Claude
+if (-not $claudeExe) {
+  Write-Host '- Claude Code absent : installation…'
+  try { Invoke-RestMethod https://claude.ai/install.ps1 | Invoke-Expression } catch { Write-Warning "L'installateur de Claude Code a signalé une erreur : $($_.Exception.Message)" }
+  Refresh-Path
+  $claudeExe = Find-Claude
+}
+if ($claudeExe) {
+  Write-Host "- Claude Code : $(& $claudeExe --version) ($claudeExe)"
+  # Si le dossier n'est pas dans le PATH de l'utilisateur, on l'y ajoute (pour la commande `claude` dans PowerShell).
+  $binDir = Split-Path $claudeExe -Parent
+  $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+  if (-not (($userPath -split ';') -contains $binDir)) {
+    try { [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $binDir), 'User'); Write-Host "- Dossier ajouté au PATH utilisateur : $binDir" } catch { Write-Warning "PATH utilisateur non modifiable (stratégie du poste ?) : l'app fonctionnera quand même, elle connaît le chemin." }
+  }
+  if (-not (($env:Path -split ';') -contains $binDir)) { $env:Path = "$env:Path;$binDir" }
+} else {
+  Write-Warning "Claude Code introuvable après installation. Vérifie l'installation seule avec :  irm https://claude.ai/install.ps1 | iex   puis relance ce script. (Cherché : $env:USERPROFILE\.local\bin\claude.exe)"
+}
 
 # 3. Téléchargement de l'application
 $token = $env:RELAY_TOKEN
@@ -67,18 +88,25 @@ if (-not (Test-Path (Join-Path $Dir 'config.json'))) {
 $cfgScript = @"
 const fs=require('fs');const p='config.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));
 c.updateRepo='$Repo';c.updateBranch='$Branch';if(process.env.RELAY_TOKEN)c.updateToken=process.env.RELAY_TOKEN;
+if(process.env.RELAY_CLAUDE)c.claudePath=process.env.RELAY_CLAUDE;
 fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
 "@
 $env:RELAY_TOKEN = $token
+$env:RELAY_CLAUDE = if ($claudeExe) { $claudeExe } else { '' }
 node -e $cfgScript
 Remove-Item Env:RELAY_TOKEN
+Remove-Item Env:RELAY_CLAUDE
 
 # 5. Connexion Claude (une seule fois)
-$status = ''
-try { $status = (claude auth status 2>$null | Out-String) } catch {}
-if ($status -notmatch '"loggedIn":\s*true') {
-  Write-Host '- Connexion à ton compte Claude : le navigateur va s''ouvrir.' -ForegroundColor Yellow
-  claude auth login
+if ($claudeExe) {
+  $status = ''
+  try { $status = (& $claudeExe auth status 2>$null | Out-String) } catch {}
+  if ($status -notmatch '"loggedIn":\s*true') {
+    Write-Host '- Connexion à ton compte Claude : le navigateur va s''ouvrir.' -ForegroundColor Yellow
+    & $claudeExe auth login
+  } else { Write-Host '- Compte Claude déjà connecté.' }
+} else {
+  Write-Warning 'Connexion Claude sautée (programme introuvable). Une fois Claude Code installé :  claude auth login'
 }
 
 # 6. Service (démarre à l'ouverture de session) et lancement

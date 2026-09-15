@@ -25,7 +25,9 @@ if ! command -v claude >/dev/null 2>&1; then
   curl -fsSL https://claude.ai/install.sh | bash
   export PATH="$HOME/.local/bin:$PATH"
 fi
-command -v claude >/dev/null 2>&1 && echo "- Claude Code : $(claude --version)" || echo "Attention : Claude Code non détecté, rouvre le terminal puis relance ce script."
+CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
+[ -z "$CLAUDE_BIN" ] && [ -x "$HOME/.local/bin/claude" ] && CLAUDE_BIN="$HOME/.local/bin/claude"
+if [ -n "$CLAUDE_BIN" ]; then echo "- Claude Code : $("$CLAUDE_BIN" --version) ($CLAUDE_BIN)"; else echo "Attention : Claude Code introuvable après installation. Vérifie avec :  curl -fsSL https://claude.ai/install.sh | bash"; fi
 
 # 3. Téléchargement de l'application
 TOKEN="${RELAY_TOKEN:-}"
@@ -58,15 +60,16 @@ cd "$DIR"
 if [ ! -f config.json ]; then
   if [ -n "${RELAY_PIN:-}" ]; then node scripts/setup.js; else node scripts/setup.js </dev/tty; fi
 else echo "- Configuration existante conservée (PIN inchangé)."; fi
-RELAY_TOKEN="$TOKEN" RELAY_REPO="$REPO" RELAY_BRANCH="$BRANCH" node -e '
+RELAY_TOKEN="$TOKEN" RELAY_REPO="$REPO" RELAY_BRANCH="$BRANCH" RELAY_CLAUDE="${CLAUDE_BIN:-}" node -e '
 const fs=require("fs");const p="config.json";const c=JSON.parse(fs.readFileSync(p,"utf8"));
 c.updateRepo=process.env.RELAY_REPO;c.updateBranch=process.env.RELAY_BRANCH;if(process.env.RELAY_TOKEN)c.updateToken=process.env.RELAY_TOKEN;
+if(process.env.RELAY_CLAUDE)c.claudePath=process.env.RELAY_CLAUDE;
 fs.writeFileSync(p,JSON.stringify(c,null,2)+"\n");'
 
 # 5. Connexion Claude (une seule fois)
-if [ -z "${RELAY_NO_SERVICE:-}" ] && ! claude auth status 2>/dev/null | grep -q '"loggedIn": *true'; then
+if [ -n "${CLAUDE_BIN:-}" ] && [ -z "${RELAY_NO_SERVICE:-}" ] && ! "$CLAUDE_BIN" auth status 2>/dev/null | grep -q '"loggedIn": *true'; then
   echo "- Connexion à ton compte Claude : le navigateur va s'ouvrir."
-  claude auth login </dev/tty
+  "$CLAUDE_BIN" auth login </dev/tty
 fi
 
 # 6. Service et lancement
