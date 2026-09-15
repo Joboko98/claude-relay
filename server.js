@@ -166,6 +166,14 @@ async function api(req, res, url) {
   // --- Mise à jour depuis GitHub ---
   if (p === '/api/update' && method === 'GET') return json(res, 200, updater.status());
   if (p === '/api/update/check' && method === 'POST') return json(res, 200, await updater.check());
+  if (p === '/api/update/restart' && method === 'POST') {
+    const running = store.list().filter((c) => runner.isRunning(c.id)).length;
+    if (running) return json(res, 409, { error: `${running} tâche(s) en cours : attends qu'elles se terminent (ou arrête-les) avant de redémarrer.` });
+    json(res, 200, { ok: true, restarting: true });
+    console.log('Redémarrage demandé depuis l\'interface…');
+    updater.scheduleRestart();
+    return undefined;
+  }
   if (p === '/api/update/apply' && method === 'POST') {
     const running = store.list().filter((c) => runner.isRunning(c.id)).length;
     if (running) return json(res, 409, { error: `${running} tâche(s) en cours : attends qu'elles se terminent (ou arrête-les) avant de mettre à jour.` });
@@ -408,7 +416,7 @@ server.listen(config.port, config.host, () => {
   console.log(`claude       : ${bin || 'INTROUVABLE (installe Claude Code ou renseigne claudePath)'}`);
   console.log(`permissions  : ${config.permissionMode}`);
   usage.refresh().catch(() => {});
-  const cur = updater.current();
+  const cur = updater.status().running;
   console.log(`version      : ${cur.version}${cur.sha ? ' · ' + cur.sha.slice(0, 7) : ''}`);
   if (config.updateRepo) {
     const tick = () => updater.check().then((st) => { if (st.available) hub.broadcast({ type: 'update', ...st }); }).catch(() => {});

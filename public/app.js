@@ -139,14 +139,21 @@ function renderVersion(st) {
   if (!st) { el.innerHTML = ''; return; }
   const cur = st.current || {};
   const sha = cur.sha ? ' · ' + cur.sha.slice(0, 7) : '';
-  el.innerHTML = `v${esc(cur.version || '?')}${esc(sha)}${st.available ? ' · <span class="avail" id="updateHint">mise à jour disponible</span>' : ''}`;
+  const run = st.running || {};
+  const shown = st.restartNeeded ? run : cur;
+  const shownSha = shown.sha ? ' · ' + shown.sha.slice(0, 7) : '';
+  const hint = st.available ? 'mise à jour disponible' : st.restartNeeded ? 'redémarrage à faire' : '';
+  el.innerHTML = `v${esc(shown.version || cur.version || '?')}${esc(shownSha)}${hint ? ' · <span class="avail" id="updateHint">' + hint + '</span>' : ''}`;
+  void sha;
   document.getElementById('updateHint')?.addEventListener('click', () => { $('#settingsBtn').click(); });
 }
 
 function describeUpdate(st) {
   const cur = st.current || {};
+  const run = st.running || {};
   const when = (d) => (d ? new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '?');
   let txt = `Version installée : ${cur.version || '?'}${cur.sha ? ' (' + cur.sha.slice(0, 7) + ', ' + when(cur.date) + (cur.message ? ', « ' + cur.message + ' »' : '') + ')' : ''}.`;
+  if (st.restartNeeded) txt += ` Le serveur tourne encore sur la ${run.version || '?'}${run.sha ? ' (' + run.sha.slice(0, 7) + ')' : ''} : redémarre-le pour appliquer.`;
   if (!st.repo) txt += ' Aucun dépôt GitHub configuré : renseigne-le ci-dessous.';
   else if (st.error) txt += ' ' + st.error;
   else if (!st.latest) txt += ' Clique sur Vérifier.';
@@ -161,6 +168,7 @@ function renderUpdate(st) {
   state.cfg.update = st;
   $('#updateInfo').textContent = describeUpdate(st);
   $('#updateApply').hidden = !st.available;
+  $('#updateRestart').hidden = !st.restartNeeded || st.available;
   $('#updateSection').open = !st.repo;
   renderVersion(st);
 }
@@ -718,6 +726,20 @@ $('#updateApply').addEventListener('click', async () => {
     $('#updateInfo').textContent = e.message;
     $('#updateApply').disabled = false;
   }
+});
+async function waitForServerThenReload(t0 = Date.now()) {
+  try { const m = await fetch('/api/me', { cache: 'no-store' }); if (m.status === 200 || m.status === 401) { location.reload(); return; } } catch { /* pas encore revenu */ }
+  if (Date.now() - t0 < 90_000) setTimeout(() => waitForServerThenReload(t0), 2000);
+  else $('#updateInfo').textContent += ' Le serveur ne répond pas encore : relance-le puis recharge la page.';
+}
+$('#updateRestart').addEventListener('click', async () => {
+  if (!confirm('Redémarrer le serveur maintenant ?')) return;
+  $('#updateRestart').disabled = true;
+  try {
+    await api('POST', '/api/update/restart');
+    $('#updateInfo').textContent = 'Redémarrage du serveur, la page se rechargera toute seule…';
+    setTimeout(() => waitForServerThenReload(), 3000);
+  } catch (e) { $('#updateInfo').textContent = e.message; $('#updateRestart').disabled = false; }
 });
 $('#policyApply').addEventListener('click', async () => {
   const signed = $('#policyPaste').value.trim();
