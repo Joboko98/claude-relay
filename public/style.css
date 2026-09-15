@@ -193,3 +193,20 @@ dialog textarea { width: 100%; font-family: ui-monospace, Menlo, monospace; font
 .attachments a.thumb img { max-width: 220px; max-height: 180px; border-radius: 8px; border: 1px solid var(--line); display: block; }
 .attachments a { color: inherit; text-decoration: none; }
 #composer.dragover { outline: 2px dashed var(--accent); outline-offset: -4px; }
+
+/* Signalement de bug */
+dialog.bug { border: none; background: transparent; padding: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; inset: 0; }
+dialog.bug::backdrop { background: transparent; }
+dialog.bug.phase-form::backdrop { background: rgba(0,0,0,0.4); }
+.bug-zone { position: fixed; inset: 0; cursor: crosshair; background: rgba(20,20,20,0.12); }
+.bug-cadre { position: fixed; border: 2px solid var(--danger); background: rgba(179,38,30,0.08); pointer-events: none; box-shadow: 0 0 0 9999px rgba(0,0,0,0.25); }
+.bug-aide { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; font-size: 13px; margin: 0; box-shadow: 0 6px 24px rgba(0,0,0,0.2); white-space: nowrap; }
+.bug-aide button { background: none; border: none; color: var(--accent); text-decoration: underline; cursor: pointer; padding: 0; font-size: inherit; }
+.bug-form { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(520px, 94vw); background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
+.bug-form h2 { margin: 0 0 12px; font-size: 1.1em; }
+.bug-form label { display: grid; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.bug-form label.check { display: flex; align-items: center; gap: 8px; }
+.bug-form label.check input { width: auto; }
+.bug-form textarea { font-family: inherit; font-size: 14px; }
+.hint.bad { color: var(--danger); }
+h2 .bug-in-dialog { font-size: 14px; vertical-align: middle; margin-left: 6px; }

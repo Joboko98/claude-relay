@@ -96,6 +96,13 @@ répare ou réinstalle sans toucher au PIN, à la configuration ni aux conversat
   la conversation. Les images (PNG, JPEG, GIF, WebP) sont montrées directement à Claude, réduites à
   1600 px si besoin ; les autres fichiers lui sont signalés par leur chemin et il les lit avec ses
   outils. Limite : 50 Mo par fichier. Les aperçus apparaissent dans la conversation.
+- **Signaler un bug de l'app** : bouton 🐞 en haut de la colonne de gauche (et dans les réglages).
+  On entoure la zone qui cloche, on décrit le problème, et le rapport est déposé dans
+  `data/bugs/<horodatage>/` (capture de la zone si tu autorises la capture de l'onglet, `rapport.md`
+  avec version, réglages, dernières erreurs du navigateur et du serveur, extrait de page) puis envoyé
+  dans une conversation « 🐞 Bugs de l'app », en mode fichiers seulement, où Claude lit le code de
+  l'application et rédige un diagnostic et un correctif proposé sans rien modifier sur le poste.
+  Copie ce diagnostic au poste de développement pour publier la correction.
 - **Dossier de travail** : bouton 📁 à côté du champ (nouvelle conversation ou ⚙ Réglages) pour
   parcourir les dossiers et en créer. L'explorateur reste sous `browseRoot` (ton dossier
   personnel par défaut).

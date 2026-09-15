@@ -22,6 +22,7 @@
   <aside id="sidebar">
     <div class="side-head">
       <button id="newConv" class="primary">+ Nouvelle</button>
+      <button id="bugBtn" class="icon" title="Signaler un bug de l'application">🐞</button>
       <button id="settingsBtn" class="icon" title="Réglages">⚙</button>
       <button id="lockBtn" class="icon" title="Verrouiller (Échap)">🔒</button>
     </div>
@@ -86,7 +87,7 @@
 
 <dialog id="settingsDialog">
   <form method="dialog" id="settingsForm">
-    <h2>Réglages</h2>
+    <h2>Réglages <button type="button" class="icon bug-in-dialog" title="Signaler un bug de cet écran">🐞</button></h2>
     <div class="row">
       <label>Modèle par défaut <select id="setModel"></select></label>
       <label>Effort par défaut <select id="setEffort"></select></label>
@@ -176,6 +177,26 @@
     <div class="dialog-actions">
       <button type="button" id="pickCancel">Annuler</button>
       <button type="submit" class="primary" id="pickChoose">Choisir ce dossier</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="bugDialog" class="bug">
+  <div class="bug-zone" id="bugZone">
+    <div class="bug-cadre" id="bugCadre" hidden></div>
+    <p class="bug-aide" id="bugAide">Entoure la zone qui pose problème en glissant la souris, ou
+      <button type="button" id="bugWhole">prends toute la page</button> ·
+      <button type="button" id="bugCancel1">annuler</button></p>
+  </div>
+  <form id="bugForm" class="bug-form" hidden>
+    <h2>Signaler un bug</h2>
+    <label>Qu'est-ce qui ne va pas ? <textarea id="bugText" rows="4" placeholder="Ce que tu as fait, ce que tu attendais, ce qui s'est passé."></textarea></label>
+    <label class="check"><input id="bugShot" type="checkbox" checked> Joindre une capture de la zone (le navigateur demandera l'autorisation de capturer cet onglet)</label>
+    <p class="hint">Le rapport contient aussi : la version de l'app, la conversation ouverte, les dernières erreurs du navigateur et du serveur, et le morceau de page sous la zone. Aucun texte de tes conversations n'est copié en dehors de ce poste : le rapport est déposé dans une conversation « 🐞 Bugs de l'app » ici même, où Claude pose un diagnostic que tu peux me transmettre.</p>
+    <p class="hint bad" id="bugMsg"></p>
+    <div class="dialog-actions">
+      <button type="button" id="bugCancel2">Annuler</button>
+      <button type="submit" class="primary" id="bugSend">Envoyer le rapport</button>
     </div>
   </form>
 </dialog>

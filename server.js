@@ -163,6 +163,83 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true, ...usage.snapshot() });
   }
 
+  // --- Rapport de bug : dossier data/bugs/<horodatage>/ + message dans la conversation « 🐞 Bugs de l'app » ---
+  if (p === '/api/bugs' && method === 'POST') {
+    const body = await readBody(req);
+    const texte = String(body.texte || '').trim().slice(0, 4000);
+    if (!texte) return json(res, 400, { error: 'Description vide' });
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').replace('T', '-');
+    const dir = path.join(DATA_DIR, 'bugs', stamp);
+    fs.mkdirSync(dir, { recursive: true });
+    const attachments = [];
+    if (typeof body.image === 'string' && body.image.length < 8_000_000) {
+      const img = path.join(dir, 'capture.png');
+      fs.writeFileSync(img, Buffer.from(body.image, 'base64'));
+      attachments.push({ path: img, rel: 'capture.png', name: 'capture.png', kind: 'image', mime: 'image/png', size: fs.statSync(img).size });
+    }
+    const ctx = body.contexte || {};
+    const st = updater.status();
+    const pol = effectivePolicy(config);
+    const logFile = ['relay.log', 'dev.log'].map((f) => path.join(DATA_DIR, f)).find((f) => fs.existsSync(f));
+    let logTail = '';
+    try { logTail = fs.readFileSync(logFile, 'utf8').split('\n').slice(-60).join('\n'); } catch { /* pas de journal */ }
+    let convErrors = [];
+    if (ctx.conversation?.id && store.get(ctx.conversation.id)) {
+      convErrors = store.messages(ctx.conversation.id).filter((m) => m.role === 'error' || (m.role === 'result' && m.isError)).slice(-5).map((m) => `${new Date(m.ts).toISOString()}  ${m.text || ''}`.slice(0, 500));
+    }
+    const rapport = [
+      `# Rapport de bug — claude-relay — ${new Date().toLocaleString('fr-FR')}`,
+      '',
+      '## Description',
+      texte,
+      '',
+      '## Contexte',
+      `- Version des fichiers : ${st.current.version} (${st.current.sha || '?'}) · en cours d'exécution : ${st.running?.version || '?'} (${st.running?.sha || '?'})`,
+      `- Plateforme serveur : ${process.platform} · Node ${process.version} · claude : ${findClaude(config.claudePath) || 'introuvable'}`,
+      `- Réglages : permissions ${config.permissionMode}, confinement ${config.confinement}, verrouillé ${pol.locked}, modèle ${config.model || 'défaut'}`,
+      `- Page : ${ctx.url || '?'} · fenêtre ${ctx.viewport || '?'} · ${ctx.userAgent || '?'}`,
+      `- Conversation ouverte : ${ctx.conversation ? `${ctx.conversation.titre} (${ctx.conversation.id}, ${ctx.conversation.statut})` : 'aucune'}`,
+      `- Zone signalée : ${body.zone ? `${Math.round(body.zone.x)},${Math.round(body.zone.y)} ${Math.round(body.zone.w)}×${Math.round(body.zone.h)}${body.zone.entier ? ' (page entière)' : ''}` : '?'}`,
+      '',
+      '## Dernières erreurs du navigateur',
+      ...((ctx.erreurs || []).length ? ctx.erreurs.map((e) => `- ${e}`) : ['(aucune)']),
+      '',
+      '## Derniers événements reçus par la page',
+      ...((ctx.evenements || []).slice(-20).map((e) => `- ${e}`)),
+      '',
+      '## Dernières erreurs de la conversation ouverte',
+      ...(convErrors.length ? convErrors.map((e) => `- ${e}`) : ['(aucune)']),
+      '',
+      '## Extrait de page sous la zone',
+      '```html',
+      String(body.html || '').slice(0, 4000),
+      '```',
+      '',
+      '## Fin du journal serveur',
+      '```',
+      logTail,
+      '```',
+    ].join('\n');
+    const md = path.join(dir, 'rapport.md');
+    fs.writeFileSync(md, rapport);
+    attachments.push({ path: md, rel: 'rapport.md', name: 'rapport.md', kind: 'file', mime: 'text/markdown', size: Buffer.byteLength(rapport) });
+
+    let conv = store.list().find((c) => c.bugs);
+    if (!conv) {
+      conv = store.create({ title: '🐞 Bugs de l\'app', cwd: ROOT, confinement: 'restricted' });
+      store.update(conv.id, { bugs: true });
+      hub.broadcast({ type: 'conv', action: 'created', conv: store.get(conv.id) });
+    }
+    const consigne = [
+      `Rapport de bug sur l'application claude-relay (l'interface que tu es en train de servir). Le dossier de travail est celui de l'application : lis le code concerné (public/app.js, public/index.html, public/style.css, server.js, lib/) pour trouver la cause.`,
+      `Consigne : ne modifie AUCUN fichier de ce poste. Rédige un diagnostic clair (cause probable, fichier et lignes concernés) puis un correctif proposé sous forme de diff, que je transmettrai au poste de développement. Le rapport complet est dans le fichier joint rapport.md ; une capture est jointe si disponible.`,
+      '',
+      `Description donnée par l'utilisateur : ${texte}`,
+    ].join('\n');
+    runner.send(store.get(conv.id), consigne, attachments);
+    return json(res, 201, { ok: true, conv: conv.id, dir });
+  }
+
   // --- Mise à jour depuis GitHub ---
   if (p === '/api/update' && method === 'GET') return json(res, 200, updater.status());
   if (p === '/api/update/check' && method === 'POST') return json(res, 200, await updater.check());
@@ -377,10 +454,13 @@ async function api(req, res, url) {
     }
 
     // Lecture d'une pièce jointe (aperçus dans la conversation), limitée au dossier _envois de la conversation
+    // et au dossier des rapports de bug.
     if (action === 'file' && method === 'GET') {
       const target = path.resolve(String(url.searchParams.get('path') || ''));
       const envois = path.resolve(conv.cwd, '_envois');
-      if (!target.startsWith(envois + path.sep) || !fs.existsSync(target) || !fs.statSync(target).isFile()) {
+      const bugs = path.resolve(DATA_DIR, 'bugs');
+      const allowed = target.startsWith(envois + path.sep) || target.startsWith(bugs + path.sep);
+      if (!allowed || !fs.existsSync(target) || !fs.statSync(target).isFile()) {
         res.writeHead(404); return res.end();
       }
       const ext = path.extname(target).toLowerCase();

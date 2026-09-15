@@ -1,6 +1,17 @@
 'use strict';
 
 const $ = (s) => document.querySelector(s);
+
+// Journal léger pour les rapports de bug : dernières erreurs du navigateur et derniers événements reçus.
+const JOURNAL = { erreurs: [], evenements: [] };
+function noterErreur(txt) {
+  JOURNAL.erreurs.push(`${new Date().toISOString().slice(11, 19)}  ${txt}`);
+  if (JOURNAL.erreurs.length > 25) JOURNAL.erreurs.shift();
+}
+window.addEventListener('error', (e) => noterErreur(`${e.message} — ${e.filename}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => noterErreur(`promesse rejetée : ${String(e.reason)}`));
+const consoleErrorOrigine = console.error.bind(console);
+console.error = (...a) => { noterErreur(a.map((x) => (x instanceof Error ? x.message : String(x))).join(' ')); consoleErrorOrigine(...a); };
 const state = {
   cfg: null, convs: [], current: null, live: '', activity: '', es: null, idleTimer: null, locked: true, usage: null,
 };
@@ -186,7 +197,12 @@ function connectEvents() {
   if (state.es) state.es.close();
   const es = new EventSource('/api/events');
   state.es = es;
-  es.onmessage = (e) => handleEvent(JSON.parse(e.data));
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    JOURNAL.evenements.push(`${new Date().toISOString().slice(11, 19)}  ${ev.type}${ev.conv ? ' ' + String(ev.conv).slice(0, 8) : ''}${ev.message ? ' ' + ev.message.role : ''}${ev.status ? ' ' + ev.status : ''}`);
+    if (JOURNAL.evenements.length > 40) JOURNAL.evenements.shift();
+    handleEvent(ev);
+  };
   es.onerror = () => { /* reconnexion automatique par le navigateur */ };
 }
 
@@ -927,6 +943,123 @@ $('#pickForm').addEventListener('submit', (e) => {
   e.preventDefault();
   if (pick.target && pick.path) pick.target.value = pick.path;
   $('#pickDialog').close();
+});
+
+// ---------- Signalement de bug ----------
+const bug = { zone: null, drag: null };
+
+function bugOpen() {
+  if (state.locked) return;
+  for (const d of document.querySelectorAll('dialog[open]')) if (d.id !== 'bugDialog') d.close();
+  bug.zone = null;
+  $('#bugCadre').hidden = true;
+  $('#bugForm').hidden = true;
+  $('#bugZone').hidden = false;
+  $('#bugMsg').textContent = '';
+  $('#bugText').value = '';
+  $('#bugDialog').classList.remove('phase-form');
+  $('#bugDialog').showModal();
+}
+function bugClose() { $('#bugDialog').close(); bug.zone = null; }
+function bugToForm(zone) {
+  bug.zone = zone;
+  $('#bugZone').hidden = true;
+  $('#bugForm').hidden = false;
+  $('#bugDialog').classList.add('phase-form');
+  $('#bugShot').checked = Boolean(navigator.mediaDevices?.getDisplayMedia);
+  $('#bugShot').disabled = !navigator.mediaDevices?.getDisplayMedia;
+  setTimeout(() => $('#bugText').focus(), 50);
+}
+$('#bugBtn').addEventListener('click', bugOpen);
+for (const b of document.querySelectorAll('.bug-in-dialog')) b.addEventListener('click', bugOpen);
+$('#bugCancel1').addEventListener('click', bugClose);
+$('#bugCancel2').addEventListener('click', bugClose);
+$('#bugWhole').addEventListener('click', () => bugToForm({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight, entier: true }));
+$('#bugZone').addEventListener('pointerdown', (e) => {
+  if (e.target.closest('.bug-aide')) return;
+  bug.drag = { x0: e.clientX, y0: e.clientY };
+  const c = $('#bugCadre'); c.hidden = false; Object.assign(c.style, { left: e.clientX + 'px', top: e.clientY + 'px', width: '0px', height: '0px' });
+  $('#bugZone').setPointerCapture(e.pointerId);
+});
+$('#bugZone').addEventListener('pointermove', (e) => {
+  if (!bug.drag) return;
+  const x = Math.min(e.clientX, bug.drag.x0), y = Math.min(e.clientY, bug.drag.y0);
+  const w = Math.abs(e.clientX - bug.drag.x0), h = Math.abs(e.clientY - bug.drag.y0);
+  Object.assign($('#bugCadre').style, { left: x + 'px', top: y + 'px', width: w + 'px', height: h + 'px' });
+});
+$('#bugZone').addEventListener('pointerup', (e) => {
+  if (!bug.drag) return;
+  const x = Math.min(e.clientX, bug.drag.x0), y = Math.min(e.clientY, bug.drag.y0);
+  const w = Math.abs(e.clientX - bug.drag.x0), h = Math.abs(e.clientY - bug.drag.y0);
+  bug.drag = null;
+  if (w < 8 || h < 8) { $('#bugCadre').hidden = true; return; } // simple clic : on recommence
+  bugToForm({ x, y, w, h, entier: false });
+});
+
+/** Capture l'onglet (autorisation demandée par le navigateur) et découpe la zone. */
+async function bugCapture(zone) {
+  if (!navigator.mediaDevices?.getDisplayMedia) return null;
+  let flux = null;
+  try {
+    flux = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 1 }, audio: false, preferCurrentTab: true, selfBrowserSurface: 'include' });
+    const video = document.createElement('video');
+    video.srcObject = flux; video.muted = true;
+    await video.play();
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    const sx = video.videoWidth / window.innerWidth, sy = video.videoHeight / window.innerHeight;
+    const onglet = Math.abs(sx - sy) < 0.05 && !zone.entier;
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    if (onglet) {
+      c.width = Math.max(1, Math.round(zone.w * sx)); c.height = Math.max(1, Math.round(zone.h * sy));
+      ctx.drawImage(video, zone.x * sx, zone.y * sy, zone.w * sx, zone.h * sy, 0, 0, c.width, c.height);
+    } else {
+      c.width = video.videoWidth; c.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      if (!zone.entier) { ctx.strokeStyle = '#e0483d'; ctx.lineWidth = 4; ctx.strokeRect(zone.x * sx, zone.y * sy, zone.w * sx, zone.h * sy); }
+    }
+    const blob = await new Promise((ok) => c.toBlob(ok, 'image/png'));
+    if (!blob) return null;
+    const b64 = await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.readAsDataURL(blob); });
+    return b64;
+  } catch { return null; } finally { flux?.getTracks().forEach((t) => t.stop()); }
+}
+
+function bugHtml(zone) {
+  const el = document.elementFromPoint(zone.x + zone.w / 2, zone.y + zone.h / 2);
+  if (!el) return '(aucun élément sous la zone)';
+  let n = el;
+  for (let i = 0; i < 2 && n.parentElement && n.parentElement !== document.body; i++) n = n.parentElement;
+  return n.outerHTML.slice(0, 4000);
+}
+
+$('#bugForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const texte = $('#bugText').value.trim();
+  if (!texte) { $('#bugMsg').textContent = 'Décris le problème en une phrase au moins.'; return; }
+  $('#bugSend').disabled = true;
+  $('#bugMsg').textContent = 'Préparation du rapport…';
+  const zone = bug.zone || { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight, entier: true };
+  $('#bugDialog').classList.remove('phase-form'); // la capture ne doit pas voir le voile sombre
+  $('#bugForm').hidden = true;
+  const image = $('#bugShot').checked ? await bugCapture(zone) : null;
+  $('#bugForm').hidden = false;
+  try {
+    const r = await api('POST', '/api/bugs', {
+      texte, zone, image, html: bugHtml(zone),
+      contexte: {
+        url: location.href, conversation: state.current ? { id: state.current.id, titre: state.current.title, statut: state.current.status } : null,
+        viewport: `${window.innerWidth}×${window.innerHeight}`, userAgent: navigator.userAgent,
+        erreurs: JOURNAL.erreurs, evenements: JOURNAL.evenements,
+      },
+    });
+    bugClose();
+    await loadConvs();
+    if (r.conv) await openConv(r.conv);
+  } catch (err) {
+    $('#bugMsg').textContent = err.message;
+    $('#bugSend').disabled = false;
+  }
 });
 
 // ---------- Démarrage ----------
