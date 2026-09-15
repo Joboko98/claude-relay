@@ -122,33 +122,48 @@ WantedBy=default.target
 }
 
 // ---------- Windows ----------
+// Sans droits administrateur : un lanceur .vbs dans le dossier « Démarrage » de la session
+// (exécuté à chaque ouverture de session), et un lancement immédiat, sans fenêtre visible.
 function windows() {
-  const TASK = 'ClaudeRelay';
   const VBS = path.join(ROOT, 'start-relay.vbs');
+  const STARTUP = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+  const LINK = path.join(STARTUP, 'claude-relay.vbs');
+  const listening = () => {
+    const cfg = loadConfig();
+    const out = run('netstat', ['-ano', '-p', 'tcp']);
+    return out.split('\n').some((l) => l.includes(`:${cfg.port} `) && /LISTENING/i.test(l));
+  };
   switch (cmd) {
     case 'install': {
-      // Lancement sans fenêtre visible, journal dans data/relay.log.
       fs.writeFileSync(VBS, `Set sh = CreateObject("WScript.Shell")
 sh.CurrentDirectory = "${ROOT}"
 sh.Environment("Process")("RELAY_SERVICE") = "1"
 sh.Run "cmd /c """"${process.execPath}"" ""${SERVER}"" >> ""${LOG}"" 2>&1""", 0, False
 `);
-      run('schtasks', ['/Delete', '/TN', TASK, '/F']);
-      console.log(run('schtasks', ['/Create', '/TN', TASK, '/SC', 'ONLOGON', '/RL', 'LIMITED', '/F', '/TR', `wscript.exe "${VBS}"`]).trim());
-      console.log(run('schtasks', ['/Run', '/TN', TASK]).trim());
-      console.log('Tâche planifiée installée (démarre à l\'ouverture de session).');
+      fs.mkdirSync(STARTUP, { recursive: true });
+      // Le fichier du dossier Démarrage se contente d'appeler le lanceur du projet (qui, lui, suit les mises à jour).
+      fs.writeFileSync(LINK, `CreateObject("WScript.Shell").Run "wscript.exe ""${VBS}""", 0, False\n`);
+      if (!listening()) {
+        run('wscript.exe', [VBS]);
+        const t0 = Date.now();
+        while (!listening() && Date.now() - t0 < 8000) { execFileSync('cmd.exe', ['/c', 'timeout /t 1 /nobreak >nul'], { stdio: 'ignore' }); }
+      }
+      if (listening()) console.log(`Serveur lancé et inscrit au démarrage de la session : ${LINK}`);
+      else console.log(`Inscrit au démarrage (${LINK}) mais le serveur ne répond pas encore : regarde ${LOG}, ou lance  npm start`);
       done();
       break;
     }
     case 'uninstall':
-      console.log(run('schtasks', ['/Delete', '/TN', TASK, '/F']).trim());
-      run('taskkill', ['/F', '/FI', `WINDOWTITLE eq ${NAME}*`]);
-      console.log('Tâche retirée. Si le serveur tourne encore, arrête le processus node dans le Gestionnaire des tâches.');
+      try { fs.unlinkSync(LINK); } catch { /* absent */ }
+      run('schtasks', ['/Delete', '/TN', 'ClaudeRelay', '/F']); // ancienne méthode, si elle avait réussi
+      console.log('Retiré du démarrage. Pour arrêter le serveur en cours : Gestionnaire des tâches → Node.js, ou redémarre la session.');
       break;
     case 'restart':
-      console.log('Arrête le processus node dans le Gestionnaire des tâches, puis :  schtasks /Run /TN ' + TASK);
+      console.log('Ferme le processus Node.js dans le Gestionnaire des tâches, puis :  wscript.exe "' + VBS + '"');
       break;
-    case 'status': console.log(run('schtasks', ['/Query', '/TN', TASK]).trim() || 'Non installée.'); break;
+    case 'status':
+      console.log(`${fs.existsSync(LINK) ? 'Inscrit au démarrage de la session' : 'Non inscrit au démarrage'} · serveur ${listening() ? 'en écoute' : 'arrêté'}.`);
+      break;
     case 'logs': logs(); break;
     default: usage();
   }

@@ -48,7 +48,7 @@ répare ou réinstalle sans toucher au PIN, à la configuration ni aux conversat
    ```bash
    npm run service -- install
    ```
-   macOS : launchd · Linux : systemd --user · Windows : Planificateur de tâches (sans fenêtre).
+   macOS : launchd · Linux : systemd --user · Windows : dossier « Démarrage » de la session (sans fenêtre, sans droits administrateur).
    `npm run service -- status | logs | restart | uninstall` pour le reste.
 
 ## Dans l'interface
