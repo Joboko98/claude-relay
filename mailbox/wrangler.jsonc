@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "claude-relay-boite",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "observability": { "enabled": true },
+  // Espace de noms clé-valeur : remplacer l'identifiant par celui que renvoie
+  //   npx wrangler kv namespace create RELEVES
+  "kv_namespaces": [
+    { "binding": "RELEVES", "id": "À_REMPLACER" }
+  ]
+}

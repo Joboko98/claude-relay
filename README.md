@@ -96,6 +96,16 @@ répare ou réinstalle sans toucher au PIN, à la configuration ni aux conversat
   la conversation. Les images (PNG, JPEG, GIF, WebP) sont montrées directement à Claude, réduites à
   1600 px si besoin ; les autres fichiers lui sont signalés par leur chemin et il les lit avec ses
   outils. Limite : 50 Mo par fichier. Les aperçus apparaissent dans la conversation.
+- **Voir la consommation des autres postes** : ⚙ Réglages → « Postes distants ». Chaque poste
+  dépose son propre relevé dans une boîte aux lettres que tu héberges toi-même (voir `mailbox/`),
+  et affiche ceux des autres sous ses propres barres : nom du poste, points consommés dans la
+  semaine et dans la fenêtre de cinq heures, coût estimé, heure de la dernière tâche, tâche en
+  cours ou non, version installée. Seuls ces chiffres voyagent : aucun texte de conversation, aucun
+  titre, aucun jeton. Aucune machine ne devient joignable de l'extérieur, chacune se contente
+  d'écrire et de lire dans la boîte. Le bureau dépose un relevé après chaque tâche et toutes les
+  quinze minutes ; le portable rafraîchit son affichage toutes les cinq minutes. Sur un poste
+  verrouillé par un administrateur, l'adresse, le secret, le nom et la publication sont en lecture
+  seule : le bureau ne peut pas se rendre muet pour dissimuler sa consommation.
 - **Signaler un bug de l'app** : bouton 🐞 en haut de la colonne de gauche (et dans les réglages).
   On entoure la zone qui cloche, on décrit le problème, et le rapport est déposé dans
   `data/bugs/<horodatage>/` (capture de la zone si tu autorises la capture de l'onglet, `rapport.md`

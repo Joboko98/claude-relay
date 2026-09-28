@@ -9,6 +9,7 @@ import { Runner, findClaude } from './lib/claude.js';
 import { Usage } from './lib/usage.js';
 import { AdminKey, POLICY_FIELDS, effectivePolicy, validatePolicy, verifySigned } from './lib/policy.js';
 import { Updater } from './lib/update.js';
+import { Mailbox } from './lib/mailbox.js';
 
 const config = loadConfig();
 if (!config.pinHash) {
@@ -21,10 +22,11 @@ const auth = new Auth({ dataDir: DATA_DIR, config });
 const store = new Store({ dataDir: DATA_DIR });
 const hub = new Hub();
 const usage = new Usage({ hub, config, dataDir: DATA_DIR });
-const runner = new Runner({ store, hub, config, usage });
 const adminKey = new AdminKey(DATA_DIR);
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const updater = new Updater({ config, rootDir: ROOT, dataDir: DATA_DIR, pkg });
+const mailbox = new Mailbox({ config, usage, hub, updater });
+const runner = new Runner({ store, hub, config, usage, mailbox });
 
 const PUBLIC = path.join(ROOT, 'public');
 const COOKIE = 'relay_sid';
@@ -89,6 +91,7 @@ function publicConfig() {
     lockOnHide: config.lockOnHide,
     lockAfterMinutes: config.lockAfterMinutes,
     defaultCwd: config.defaultCwd,
+    mailbox: mailbox.etat(),
     policy: effectivePolicy(config),
     adminPublicKey: config.adminPublicKey || '',
     hasAdminKey: adminKey.exists(),
@@ -161,6 +164,16 @@ async function api(req, res, url) {
     if (config.adminPublicKey) return json(res, 403, { error: 'Compteur verrouillé par l\'administrateur.' });
     usage.resetLocal();
     return json(res, 200, { ok: true, ...usage.snapshot() });
+  }
+
+  // --- Relevés des autres postes (boîte aux lettres) ---
+  if (p === '/api/postes' && method === 'GET') {
+    if (url.searchParams.has('force')) await mailbox.lire({ force: true });
+    return json(res, 200, mailbox.etat());
+  }
+  if (p === '/api/postes/publier' && method === 'POST') {
+    await mailbox.publier({ force: true });
+    return json(res, 200, mailbox.etat());
   }
 
   // --- Rapport de bug : dossier data/bugs/<horodatage>/ + message dans la conversation « 🐞 Bugs de l'app » ---
@@ -319,12 +332,39 @@ async function api(req, res, url) {
       const n = Number(body.lockAfterMinutes);
       if (Number.isInteger(n) && n >= 0 && n <= 1440) config.lockAfterMinutes = n; else errors.push('lockAfterMinutes');
     }
+    let boiteAChange = false;
     const barrierKeys = Object.keys(POLICY_FIELDS);
     if (barrierKeys.some((k) => k in body)) {
       if (config.adminPublicKey) return json(res, 403, { error: 'Barrières verrouillées par l\'administrateur : elles ne changent que par politique signée depuis le poste administrateur.' });
       const v = validatePolicy({ ...config, ...Object.fromEntries(barrierKeys.filter((k) => k in body).map((k) => [k, body[k]])) });
       if (v.error) return json(res, 400, { error: v.error });
       Object.assign(config, v.policy);
+    }
+    const champsBoite = ['mailboxUrl', 'mailboxSecret', 'posteName', 'mailboxPublish', 'mailboxRead'];
+    if (champsBoite.some((k) => k in body)) {
+      // Un poste administré ne peut pas se rendre muet : seule la lecture reste à sa main.
+      const verrouilles = champsBoite.filter((k) => k !== 'mailboxRead');
+      if (config.adminPublicKey && verrouilles.some((k) => k in body && body[k] !== config[k])) {
+        return json(res, 403, { error: 'Réglages de la boîte aux lettres verrouillés par l\'administrateur.' });
+      }
+      if ('mailboxUrl' in body) {
+        const v = String(body.mailboxUrl || '').trim();
+        // HTTPS exigé, sauf pour une adresse locale, commode pour les essais.
+        const locale = /^http:\/\/(localhost|127\.0\.0\.1)(:\d{2,5})?(\/\S*)?$/.test(v);
+        const distante = /^https:\/\/[\w.-]+(\.[\w-]+)+(:\d{2,5})?(\/\S*)?$/.test(v);
+        if (v && !locale && !distante) errors.push('mailboxUrl'); else config.mailboxUrl = v.replace(/\/+$/, '');
+      }
+      if ('mailboxSecret' in body) {
+        const v = String(body.mailboxSecret || '');
+        if (v !== '••••') config.mailboxSecret = v.trim(); // « •••• » = inchangé
+      }
+      if ('posteName' in body) {
+        const v = String(body.posteName || '').trim();
+        if (v && !/^[a-z0-9][a-z0-9 _-]{0,31}$/i.test(v)) errors.push('posteName'); else config.posteName = v;
+      }
+      if ('mailboxPublish' in body) config.mailboxPublish = Boolean(body.mailboxPublish);
+      if ('mailboxRead' in body) config.mailboxRead = Boolean(body.mailboxRead);
+      boiteAChange = true;
     }
     if ('updateRepo' in body) {
       const v = String(body.updateRepo || '').trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/$/, '');
@@ -353,6 +393,7 @@ async function api(req, res, url) {
     }
     if (errors.length) return json(res, 400, { error: `Valeur invalide : ${errors.join(', ')}` });
     saveConfig(config);
+    if (boiteAChange) { mailbox.demarrer(); mailbox.lire({ force: true }).catch(() => {}); }
     const pub = publicConfig();
     hub.broadcast({ type: 'settings', ...pub });
     hub.broadcast({ type: 'usage', ...usage.snapshot() });
@@ -547,6 +588,8 @@ server.listen(config.port, config.host, () => {
   console.log(`claude       : ${bin || 'INTROUVABLE (installe Claude Code ou renseigne claudePath)'}`);
   console.log(`permissions  : ${config.permissionMode}`);
   usage.refresh().catch(() => {});
+  mailbox.demarrer();
+  if (mailbox.actif) console.log(`boîte        : ${config.mailboxUrl} · poste « ${mailbox.nom || 'sans nom'} »${config.mailboxPublish ? ' · publie' : ''}${config.mailboxRead ? ' · lit' : ''}`);
   const cur = updater.status().running;
   console.log(`version      : ${cur.version}${cur.sha ? ' · ' + cur.sha.slice(0, 7) : ''}`);
   if (config.updateRepo) {

@@ -137,6 +137,8 @@ async function init() {
   renderVersion(state.cfg.update);
   armIdleTimer();
   connectEvents();
+  renderPostes(state.cfg.mailbox);
+  refreshPostes();
   await loadConvs();
   const last = localStorage.getItem('relay.last');
   const target = state.convs.find((c) => c.id === last) || state.convs[0];
@@ -247,7 +249,7 @@ function renderUsage(u) {
     if (l && (localLimit > 0 || l.points > 0 || l.cost > 0)) {
       const lp = Math.max(0, Math.min(100, l.effective));
       const lcls = localLimit > 0 && lp >= localLimit ? 'over' : localLimit > 0 && lp >= localLimit * 0.8 ? 'warn' : '';
-      const cost = l.cost >= 0.01 ? ` · ${l.cost.toFixed(2)} $` : '';
+      const cost = l.cost >= 0.01 ? ` · ${eur(l.cost)} $` : '';
       const how = l.calibrated
         ? `estimé d'après le coût des tâches (${l.samples} échantillons de calibrage) ; observé : ${Math.round(l.points)} pt`
         : `points observés ; calibrage en cours (${l.samples}/2 échantillons), l'estimation par le coût prendra le relais`;
@@ -270,6 +272,54 @@ function renderMoment(m) {
   box.className = `moment ${m.level}`;
   box.innerHTML = `<div class="title">${icon} ${esc(m.title)}</div><ul>${(m.reasons || []).map((r) => `<li>${esc(r)}</li>`).join('')}</ul>`;
 }
+
+const eur = (n) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function ilYA(ts) {
+  if (!ts) return 'jamais';
+  const m = Math.round((Date.now() - ts) / 60_000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `il y a ${h} h`;
+  return `il y a ${Math.round(h / 24)} j`;
+}
+
+function renderPostes(etat) {
+  const box = $('#postes');
+  if (!etat) { box.innerHTML = ''; return; }
+  state.postes = etat;
+  const liste = etat.lit ? (etat.postes || []) : [];
+  if (!liste.length) {
+    box.innerHTML = etat.configure && etat.lit
+      ? '<div class="when">Aucun autre poste n\'a encore publié.</div>'
+      : '';
+    return;
+  }
+  let html = '';
+  for (const p of liste) {
+    const semaine = p.fenetres?.seven_day;
+    const session = p.fenetres?.five_hour;
+    const mesure = Boolean(semaine || session);
+    const pts = semaine ? (semaine.retenu ?? semaine.points ?? 0) : 0;
+    const large = Math.max(0, Math.min(100, pts));
+    const vieux = Date.now() - (p.maj || 0) > 3 * 3_600_000;
+    html += `<div class="poste ${p.enCours ? 'actif' : ''} ${vieux ? 'vieux' : ''}">
+      <div class="nom"><span class="dot"></span>${esc(p.poste)}${p.enCours ? ' · tâche en cours' : ''}</div>
+      <div class="barre"><i style="width:${large}%"></i></div>
+      <div class="ligne">${mesure ? `${semaine?.calibre ? '≈ ' : ''}${Math.round(pts)} pt cette semaine${semaine?.cout >= 0.01 ? ` · ${eur(semaine.cout)} $` : ''}` : 'consommation pas encore mesurée sur ce poste'}</div>
+      <div class="ligne">${session ? `${Math.round(session.retenu ?? session.points ?? 0)} pt sur la fenêtre de 5 h · ` : ''}dernière tâche ${esc(ilYA(p.derniereTache))}</div>
+      <div class="ligne">relevé ${esc(ilYA(p.maj))}${p.version ? ` · v${esc(p.version)}` : ''}</div>
+    </div>`;
+  }
+  box.innerHTML = html;
+}
+
+async function refreshPostes(force = false) {
+  if (!state.cfg?.mailbox?.configure) return;
+  try { renderPostes(await api('GET', '/api/postes' + (force ? '?force=1' : ''))); } catch { /* affiché via SSE sinon */ }
+}
+setInterval(() => { if (!state.locked) refreshPostes(); }, 5 * 60_000);
 
 // ---------- Conversations ----------
 async function loadConvs() {
@@ -337,6 +387,7 @@ function updateConvLocal(id, patch) {
 // ---------- Événements temps réel ----------
 function handleEvent(ev) {
   if (ev.type === 'usage') { renderUsage(ev); return; }
+  if (ev.type === 'postes') { renderPostes(ev); return; }
   if (ev.type === 'settings') { state.cfg = { ...state.cfg, ...ev }; renderClaudeStatus(); renderVersion(state.cfg.update); armIdleTimer(); return; }
   if (ev.type === 'update') { renderVersion(ev); if ($('#settingsDialog').open) renderUpdate(ev); return; }
   if (ev.type === 'conv') {
@@ -766,6 +817,18 @@ $('#settingsBtn').addEventListener('click', () => {
   $('#policyInfo').textContent = !locked ? ''
     : p.valid ? `Politique signée le ${new Date(p.issuedAt).toLocaleString('fr-FR')}${p.note ? ' — ' + p.note : ''}. Pour la changer : générer une nouvelle politique sur le poste administrateur et la coller ci-dessous.`
     : `Aucune politique valide (${p.error}) : valeurs strictes par défaut appliquées. Colle une politique signée ci-dessous.`;
+  const mb = c.mailbox || {};
+  $('#setBoiteUrl').value = mb.url || '';
+  $('#setBoiteSecret').value = mb.aSecret ? '••••' : '';
+  $('#setPosteNom').value = mb.nom || '';
+  $('#setBoitePublier').checked = Boolean(mb.publie);
+  $('#setBoiteLire').checked = Boolean(mb.lit);
+  const verrou = Boolean(c.adminPublicKey);
+  for (const id of ['#setBoiteUrl', '#setBoiteSecret', '#setPosteNom', '#setBoitePublier']) $(id).disabled = verrou;
+  $('#boiteInfo').textContent = !mb.configure
+    ? "Aucune boîte configurée : ce poste ne publie rien et n'affiche aucun autre poste."
+    : `${mb.publie ? `Ce poste publie sous le nom « ${mb.nom} », dernier dépôt ${mb.publieLe ? ilYA(mb.publieLe) : 'jamais'}.` : 'Ce poste ne publie pas.'} ${mb.lit ? `${(mb.postes || []).length} autre(s) poste(s) suivi(s), relevés lus ${mb.luLe ? ilYA(mb.luLe) : 'jamais'}.` : 'Ce poste n\'affiche pas les autres.'}${mb.erreur ? ' ' + mb.erreur : ''}${verrou ? ' Réglages verrouillés par l\'administrateur.' : ''}`;
+  $('#boiteSection').open = !mb.configure;
   const up = c.update || {};
   $('#setUpdateRepo').value = up.repo || '';
   $('#setUpdateBranch').value = up.branch || 'main';
@@ -791,6 +854,13 @@ $('#settingsForm').addEventListener('submit', async (e) => {
       permissionMode: $('#setPermission').value,
       confinement: $('#setConf').value,
       defaultCwd: $('#setCwd').value,
+      ...(state.cfg.adminPublicKey ? { mailboxRead: $('#setBoiteLire').checked } : {
+        mailboxUrl: $('#setBoiteUrl').value,
+        mailboxSecret: $('#setBoiteSecret').value,
+        posteName: $('#setPosteNom').value,
+        mailboxPublish: $('#setBoitePublier').checked,
+        mailboxRead: $('#setBoiteLire').checked,
+      }),
       updateRepo: $('#setUpdateRepo').value,
       updateBranch: $('#setUpdateBranch').value || 'main',
       updateToken: $('#setUpdateToken').value,
@@ -804,6 +874,8 @@ $('#settingsForm').addEventListener('submit', async (e) => {
     armIdleTimer();
     $('#settingsDialog').close();
     refreshUsage();
+    renderPostes(state.cfg.mailbox);
+    refreshPostes(true);
   } catch (err) {
     alert(err.message);
   }
@@ -886,6 +958,15 @@ $('#adminSign').addEventListener('click', async () => {
     $('#adminSigned').value = r.signed;
     $('#adminSigned').select();
   } catch (e) { alert(e.message); }
+});
+$('#boitePublier').addEventListener('click', async () => {
+  $('#boiteInfo').textContent = 'Dépôt en cours…';
+  try {
+    const r = await api('POST', '/api/postes/publier');
+    state.cfg.mailbox = r;
+    $('#boiteInfo').textContent = r.erreur || `Relevé déposé ${ilYA(r.publieLe)}.`;
+    renderPostes(r);
+  } catch (e) { $('#boiteInfo').textContent = e.message; }
 });
 $('#resetLocalBtn').addEventListener('click', async () => {
   if (!confirm('Remettre à zéro le compteur de consommation de ce poste ?')) return;

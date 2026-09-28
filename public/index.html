@@ -30,6 +30,7 @@
     <div class="side-foot">
       <div id="moment" class="moment"></div>
       <div id="usage" class="usage"></div>
+      <div id="postes" class="postes"></div>
       <div id="claudeStatus"></div>
       <div id="versionLine" class="when"></div>
     </div>
@@ -122,6 +123,22 @@
       </div>
     </fieldset>
     <p class="hint">0 = barrière désactivée. 1 et 2 : consommation propre de ce poste (estimée d'après le coût des tâches, calibrage automatique). 3 et 4 : ce poste s'arrête quand il reste moins que la réserve sur le compte entier ; la réserve exigée diminue proportionnellement au temps restant en fin de fenêtre. <button type="button" id="resetLocalBtn" class="link">Remettre le compteur de ce poste à zéro</button></p>
+    <h3>Postes distants</h3>
+    <p class="hint" id="boiteInfo"></p>
+    <details id="boiteSection">
+      <summary>Boîte aux lettres : voir la consommation des autres postes</summary>
+      <label>Adresse de la boîte <input id="setBoiteUrl" placeholder="https://claude-relay-boite.….workers.dev"></label>
+      <div class="row">
+        <label>Secret partagé <input id="setBoiteSecret" type="password" autocomplete="off" placeholder="la même phrase sur tous les postes"></label>
+        <label>Nom de ce poste <input id="setPosteNom" placeholder="bureau ou portable"></label>
+      </div>
+      <div class="row">
+        <label class="check"><input id="setBoitePublier" type="checkbox"> Publier ma consommation</label>
+        <label class="check"><input id="setBoiteLire" type="checkbox"> Afficher les autres postes</label>
+      </div>
+      <p class="hint">Seuls des chiffres voyagent : points consommés, coût estimé, heure de la dernière tâche, version. Aucun texte de conversation ne quitte ce poste, et ce poste ne devient joignable par personne. <button type="button" id="boitePublier" class="link">Publier tout de suite</button></p>
+    </details>
+
     <h3>Mise à jour</h3>
     <p class="hint" id="updateInfo"></p>
     <div class="dialog-actions update-actions">

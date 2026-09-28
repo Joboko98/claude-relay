@@ -214,3 +214,14 @@ h2 .bug-in-dialog { font-size: 14px; vertical-align: middle; margin-left: 6px; }
 .bug-colle.dragover { border-color: var(--accent); }
 .bug-colle img { max-height: 90px; max-width: 220px; border-radius: 6px; border: 1px solid var(--line); vertical-align: middle; }
 .bug-colle button { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+
+/* Relevés des autres postes */
+.postes { display: grid; gap: 6px; margin-bottom: 8px; }
+.postes .poste { border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 12px; }
+.postes .poste .nom { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.postes .poste .nom .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
+.postes .poste.actif .nom .dot { background: var(--accent); animation: pulse 1.2s infinite; }
+.postes .poste .ligne { color: var(--muted); }
+.postes .poste .barre { position: relative; height: 6px; border-radius: 3px; background: var(--user); overflow: hidden; margin: 4px 0; }
+.postes .poste .barre > i { position: absolute; inset: 0 auto 0 0; background: var(--accent); opacity: 0.6; }
+.postes .vieux { opacity: 0.55; }
