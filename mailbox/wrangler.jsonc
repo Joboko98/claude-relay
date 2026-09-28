@@ -4,9 +4,11 @@
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
   "observability": { "enabled": true },
-  // Espace de noms clé-valeur : remplacer l'identifiant par celui que renvoie
+  // Espace de noms clé-valeur (stockage simple, une valeur par clé). L'identifiant ci-dessous
+  // désigne l'espace créé sur le compte de Yossef ; un autre déploiement doit créer le sien :
   //   npx wrangler kv namespace create RELEVES
+  // Cet identifiant ne donne aucun accès par lui-même : toute écriture exige un jeton du compte.
   "kv_namespaces": [
-    { "binding": "RELEVES", "id": "À_REMPLACER" }
+    { "binding": "RELEVES", "id": "918677900bf544aea27dc0e0c000cab7" }
   ]
 }
